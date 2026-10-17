@@ -1,0 +1,261 @@
+:root {
+  --highlight-selected: #fbbf24; /* amber-400 */
+  --highlight-move: #86efac; /* green-300 */
+  --bg: #f4f4f5; /* zinc-100 */
+  --text: #18181b; /* zinc-900 */
+  --muted: #71717a; /* zinc-500 */
+  --board-size: min(90vw, 560px);
+  /* Default board colors (classic theme fallback) */
+  --light-square: #eeeed2;
+  --dark-square: #769656;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+.app {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  padding: 1.5rem 0;
+}
+
+.app__header {
+  text-align: center;
+}
+
+.app__header h1 {
+  margin: 0;
+  font-size: 1.75rem;
+  font-weight: 700;
+}
+
+.app__subtitle {
+  margin: 0.25rem 0 0;
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+
+.status {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  min-height: 1.5rem;
+  font-weight: 600;
+}
+
+.status__state {
+  color: #b91c1c;
+}
+
+/* Elegant theme picker above the board */
+.theme-picker {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  color: var(--muted);
+}
+
+.theme-picker__label {
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 0.75rem;
+}
+
+.theme-picker__select {
+  appearance: none;
+  padding: 0.45rem 2rem 0.45rem 0.75rem;
+  border: 1px solid #d4d4d8; /* zinc-300 */
+  border-radius: 999px;
+  background: #fff
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%2371717a' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E")
+    no-repeat right 0.75rem center;
+  color: var(--text);
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.theme-picker__select:hover {
+  border-color: #a1a1aa; /* zinc-400 */
+}
+
+.theme-picker__select:focus {
+  outline: none;
+  border-color: #71717a;
+  box-shadow: 0 0 0 3px rgba(113, 113, 122, 0.2);
+}
+
+/* Chess clocks (Blitz timer) */
+.timer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: var(--board-size);
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  background: #fff;
+  border: 1px solid #e4e4e7; /* zinc-200 */
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.timer__label {
+  font-weight: 600;
+  font-size: 0.875rem;
+  color: var(--muted);
+}
+
+.timer__time {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  font-size: 1.25rem;
+}
+
+/* Running clock gets a green highlight */
+.timer--active {
+  border-color: #16a34a; /* green-600 */
+  box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.15);
+}
+
+.timer--active .timer__label {
+  color: #16a34a;
+}
+
+/* Expired clock turns red */
+.timer--expired {
+  border-color: #dc2626; /* red-600 */
+  background: #fef2f2; /* red-50 */
+}
+
+.timer--expired .timer__label,
+.timer--expired .timer__time {
+  color: #dc2626;
+}
+
+/* 8x8 board using CSS Grid */
+.board {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  grid-template-rows: repeat(8, 1fr);
+  width: var(--board-size);
+  height: var(--board-size);
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 10px 30px rgba(24, 24, 27, 0.25);
+}
+
+.square {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: calc(var(--board-size) / 12);
+  line-height: 1;
+  cursor: pointer;
+  user-select: none;
+  position: relative;
+}
+
+.square--light {
+  background: var(--light-square);
+  transition: background-color 0.3s ease;
+}
+
+.square--dark {
+  background: var(--dark-square);
+  transition: background-color 0.3s ease;
+}
+
+.square--selected {
+  background: var(--highlight-selected);
+}
+
+/* Board themes (applied via data-theme on .board wrapper) */
+.board--classic {
+  --light-square: #eeeed2; /* cream-green classic */
+  --dark-square: #769656; /* lichess green */
+}
+
+.board--wood {
+  --light-square: #f0d9b5; /* light wood */
+  --dark-square: #b58863; /* dark wood */
+}
+
+.board--dark {
+  --light-square: #9ca3af; /* gray-400 */
+  --dark-square: #1f2937; /* gray-800 */
+}
+
+.board--dark .piece--white {
+  color: #f9fafb;
+  text-shadow: 0 0 3px #000, 0 0 3px #000, 0 0 3px #000;
+}
+
+.board--dark .piece--black {
+  color: #030712;
+  text-shadow: 0 0 3px #9ca3af, 0 0 3px #9ca3af;
+}
+
+/* Legal move target */
+.square--move::after {
+  content: "";
+  position: absolute;
+  width: 28%;
+  height: 28%;
+  border-radius: 50%;
+  background: var(--highlight-move);
+  opacity: 0.85;
+}
+
+.piece--white {
+  color: #fafafa;
+  text-shadow: 0 0 2px #18181b, 0 0 2px #18181b, 0 0 2px #18181b;
+}
+
+.piece--black {
+  color: #18181b;
+}
+
+.btn {
+  padding: 0.6rem 1.25rem;
+  border: none;
+  border-radius: 6px;
+  background: #27272a; /* zinc-800 */
+  color: #fafafa;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.btn:hover {
+  background: #3f3f46; /* zinc-700 */
+}
+
+.app__footer {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.btn--ghost {
+  background: transparent;
+  color: #27272a;
+  border: 1px solid #d4d4d8; /* zinc-300 */
+}
+
+.btn--ghost:hover {
+  background: #e4e4e7; /* zinc-200 */
+}
