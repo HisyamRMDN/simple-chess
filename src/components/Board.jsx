@@ -6,8 +6,8 @@ const PIECES = {
   b: { k: "♚", q: "♛", r: "♜", b: "♝", n: "♞", p: "♟" },
 };
 
-/** Board grid; props: board matrix, selectedSquare, legalTargets, theme, onSquareClick. */
-export default function Board({ board, selectedSquare, legalTargets, theme, onSquareClick }) {
+/** Board grid; props: board matrix, selectedSquare, legalTargets, checkSquare, theme, onSquareClick. */
+export default function Board({ board, selectedSquare, legalTargets, checkSquare, theme, onSquareClick }) {
   return (
     <div className={`board board--${theme}`} role="grid" aria-label="Chess board">
       {board.map((row, rankIndex) =>
@@ -17,6 +17,7 @@ export default function Board({ board, selectedSquare, legalTargets, theme, onSq
           let className = `square ${isLight ? "square--light" : "square--dark"}`;
           if (name === selectedSquare) className += " square--selected";
           if (legalTargets.includes(name)) className += " square--move";
+          if (name === checkSquare) className += " square--check";
           return (
             <div
               key={name}

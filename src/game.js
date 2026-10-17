@@ -44,3 +44,44 @@ export function getStatus() {
 export function getFen() {
   return chess.fen();
 }
+
+/** Return the square of the king currently in check, or null. */
+export function getCheckSquare() {
+  if (!chess.isCheck()) return null;
+  const color = chess.turn(); // side to move is the side in check
+  const board = chess.board();
+  for (const row of board) {
+    for (const cell of row) {
+      if (cell && cell.type === "k" && cell.color === color) return cell.square;
+    }
+  }
+  return null;
+}
+
+/** Return verbose move history: [{color, san, captured, ...}] in play order. */
+
+/** Return the piece on a square: {type, color} or null. */
+export function getPiece(square) {
+  return chess.get(square);
+}
+
+/** Return all legal moves (verbose) for the side to move. */
+export function getAllMoves() {
+  return chess.moves({ verbose: true });
+}
+export function getHistory() {
+  return chess.history({ verbose: true });
+}
+
+/** Try to move using a UCI string like "e2e4" or "e7e8q"; returns move or null. */
+export function makeMoveUci(uci) {
+  try {
+    return chess.move({
+      from: uci.slice(0, 2),
+      to: uci.slice(2, 4),
+      promotion: uci.slice(4) || "q",
+    });
+  } catch {
+    return null;
+  }
+}
