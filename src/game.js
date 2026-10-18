@@ -18,14 +18,29 @@ export function getLegalMoves(square) {
   return chess.moves({ square, verbose: true }).map((move) => move.to);
 }
 
-/** Try to move a piece; returns the move object or null if illegal. */
-export function makeMove(from, to) {
+/** Try to move a piece; `promotion` is "q"|"r"|"b"|"n". Returns move or null. */
+export function makeMove(from, to, promotion = "q") {
   try {
-    return chess.move({ from, to, promotion: "q" });
+    return chess.move({ from, to, promotion });
   } catch {
     return null;
   }
 }
+
+/** True if moving from→to is a pawn promotion (needs piece choice). */
+export function isPromotionMove(from, to) {
+  return chess
+    .moves({ square: from, verbose: true })
+    .some((m) => m.to === to && m.promotion);
+}
+
+/** Promotion piece choices with Indonesian labels. */
+export const PROMOTION_CHOICES = [
+  { id: "q", label: "Menteri" },
+  { id: "r", label: "Benteng" },
+  { id: "n", label: "Kuda" },
+  { id: "b", label: "Gajah" },
+]
 
 /** Return the color to move: "w" or "b". */
 export function getTurn() {

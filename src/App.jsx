@@ -1,6 +1,7 @@
 // Main App component: game state + status + reset + sound effects + board themes + blitz timer.
 import React, { useEffect, useRef, useState } from "react";
 import Board from "./components/Board.jsx";
+import PromotionModal from "./components/PromotionModal.jsx";
 import Timer from "./components/Timer.jsx";
 import InfoPanel from "./components/InfoPanel.jsx";
 import * as game from "./game.js";
@@ -36,6 +37,9 @@ export default function App() {
   const [aiLevel, setAiLevel] = useState("medium");
   // True while Stockfish is thinking; locks the board and shows a hint.
   const [aiThinking, setAiThinking] = useState(false);
+  // Pending promotion: {from, to} held while the choice modal is open.
+  // The move is NOT executed until the player picks a piece.
+  const [pendingPromo, setPendingPromo] = useState(null);
   // Mutable ref so the interval always sees the latest turn/game-over state.
   const turnRef = useRef(game.getTurn());
   const overRef = useRef(false);
@@ -120,8 +124,16 @@ export default function App() {
     // Locked: game over, AI is thinking, or Black's turn in AI mode.
     if (gameOver || aiThinking) return;
     if (vsAI && game.getTurn() !== "w") return;
+    // Promotion choice open: only the modal decides the next action.
+    if (pendingPromo) return;
     if (selectedSquare && legalTargets.includes(square)) {
-      // makeMove returns the move object; flags contain "c"/"e" on captures.
+      // Pawn reaching the last rank: pause and ask which piece to promote to.
+      if (game.isPromotionMove(selectedSquare, square)) {
+        setPendingPromo({ from: selectedSquare, to: square });
+        setSelectedSquare(null);
+        setLegalTargets([]);
+        return;
+      }
       const move = game.makeMove(selectedSquare, square);
       setSelectedSquare(null);
       setLegalTargets([]);
@@ -151,12 +163,30 @@ export default function App() {
     setSoundEnabled(next);
   }
 
+  /** Run the pending promotion with the chosen piece ("q"|"r"|"n"|"b"). */
+  function handlePromotionPick(piece) {
+    if (!pendingPromo) return;
+    const move = game.makeMove(pendingPromo.from, pendingPromo.to, piece);
+    setPendingPromo(null);
+    setFen(game.getFen());
+    if (move) {
+      setGameStarted(true);
+      playSoundFor(move);
+    }
+  }
+
+  /** Cancel the pending promotion; the pawn stays on its square. */
+  function handlePromotionCancel() {
+    setPendingPromo(null);
+  }
+
   /** Reset the game to the starting position. */
   function handleReset() {
     stopEngine();
     game.resetGame();
     setSelectedSquare(null);
     setLegalTargets([]);
+    setPendingPromo(null);
     setFen(game.getFen());
     setClocks({ w: START_SECONDS, b: START_SECONDS });
     setTimeoutLoser(null);
@@ -173,6 +203,7 @@ export default function App() {
     game.resetGame();
     setSelectedSquare(null);
     setLegalTargets([]);
+    setPendingPromo(null);
     setFen(game.getFen());
     setClocks({ w: START_SECONDS, b: START_SECONDS });
     setTimeoutLoser(null);
@@ -195,7 +226,9 @@ export default function App() {
     );
     const pool = captures.length > 0 ? captures : moves;
     const pick = pool[Math.floor(Math.random() * pool.length)];
-    return game.makeMove(pick.from, pick.to);
+    // Preserve Stockfish-style promotion choice if the fallback move promotes.
+    const promotion = pick.promotion || "q";
+    return game.makeMove(pick.from, pick.to, promotion);
   }
 
   /** Timeout message, e.g. "Waktu Habis, Putih Kalah". */
@@ -267,14 +300,24 @@ export default function App() {
             expired={timeoutLoser === "b"}
           />
 
-          <Board
-            board={board}
-            selectedSquare={selectedSquare}
-            legalTargets={legalTargets}
-            checkSquare={checkSquare}
-            theme={theme}
-            onSquareClick={handleSquareClick}
-          />
+          <div className="board-wrap">
+            <Board
+              board={board}
+              selectedSquare={selectedSquare}
+              legalTargets={legalTargets}
+              checkSquare={checkSquare}
+              theme={theme}
+              onSquareClick={handleSquareClick}
+            />
+            {pendingPromo && (
+              <PromotionModal
+                color={turn}
+                target={pendingPromo.to}
+                onPick={handlePromotionPick}
+                onCancel={handlePromotionCancel}
+              />
+            )}
+          </div>
 
           <Timer
             label="Putih"
