@@ -49,6 +49,52 @@ function sendAndWait(worker, command, isDone, timeoutMs = 30000) {
   });
 }
 
+/** Ask Stockfish for a static evaluation of a FEN position (centipawns,
+ *  from White's perspective). Uses a shallow depth so batch analysis of a
+ *  whole game stays fast. Returns null if the engine is unreachable. */
+export async function getEvaluation(fen, depth = 8) {
+  try {
+    const worker = await loadWorker();
+    return await captureScore(worker, fen, depth);
+  } catch {
+    return null;
+  }
+}
+
+/** Run one search and capture the last `info ... score cp/mate` line. */
+function captureScore(worker, fen, depth) {
+  return new Promise((resolve) => {
+    let lastCp = null;
+    let lastMate = null;
+    const timer = setTimeout(() => {
+      worker.removeEventListener("message", onMessage);
+      resolve(lastMate !== null ? mateToCp(lastMate) : lastCp);
+    }, 8000);
+    function onMessage(e) {
+      const msg = typeof e.data === "string" ? e.data : "";
+      const m = msg.match(/score (cp|mate) (-?\d+)/);
+      if (msg.startsWith("info") && m) {
+        if (m[1] === "cp") lastCp = parseInt(m[2], 10);
+        else lastMate = parseInt(m[2], 10);
+      }
+      if (msg.startsWith("bestmove")) {
+        clearTimeout(timer);
+        worker.removeEventListener("message", onMessage);
+        resolve(lastMate !== null ? mateToCp(lastMate) : lastCp);
+      }
+    }
+    worker.addEventListener("message", onMessage);
+    worker.postMessage(`position fen ${fen}`);
+    worker.postMessage(`go depth ${depth}`);
+  }).catch(() => null);
+}
+
+/** Convert a mate-in-N score to a large centipawn value (sign = side to mate). */
+function mateToCp(mate) {
+  if (mate === 0) return 0;
+  return Math.sign(mate) * (100000 - Math.abs(mate) * 1000);
+}
+
 /** Tell the engine to stop the current search (used on reset). */
 export async function stopEngine() {
   try {

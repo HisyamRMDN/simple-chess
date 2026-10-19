@@ -6,10 +6,11 @@ import MainMenu from "./components/MainMenu.jsx";
 import SettingsModal from "./components/SettingsModal.jsx";
 import BackgroundMusic from "./components/BackgroundMusic.jsx";
 import PromotionModal from "./components/PromotionModal.jsx";
+import PostMatchScreen from "./components/PostMatchScreen.jsx";
 import Timer from "./components/Timer.jsx";
 import InfoPanel from "./components/InfoPanel.jsx";
 import * as game from "./game.js";
-import { getBestMove, stopEngine, AI_LEVELS } from "./stockfish.js";
+import { getBestMove, getEvaluation, stopEngine, AI_LEVELS } from "./stockfish.js";
 import { playMoveSound, playCaptureSound, playCheckSound, setSoundEnabled } from "./sound.js";
 
 /** Available board themes for the dropdown. */
@@ -22,7 +23,13 @@ const THEMES = [
 /** Starting time per player in seconds (Blitz 5+0). */
 const START_SECONDS = 5 * 60;
 
+/** Win probability (%) from a centipawn score (lichess formula). */
+function winPercent(cp) {
+  return 50 + 50 * (2 / (1 + Math.exp(-0.003682 * cp)) - 1);
+}
+
 export default function App() {
+  // ── 1. ALL useState FIRST (nothing may read derived values above this) ──
   // fen triggers re-render after each move; board derived from game layer.
   const [fen, setFen] = useState(game.getFen());
   const [selectedSquare, setSelectedSquare] = useState(null);
@@ -56,10 +63,18 @@ export default function App() {
   // Pending promotion: {from, to} held while the choice modal is open.
   // The move is NOT executed until the player picks a piece.
   const [pendingPromo, setPendingPromo] = useState(null);
+  // Post-match accuracy (% per color, null = unavailable/analyzing).
+  const [accuracy, setAccuracy] = useState({ w: null, b: null });
+  const [analyzing, setAnalyzing] = useState(false);
+  // Delay the scoreboard ~1s so the final move/sound registers first.
+  const [showResult, setShowResult] = useState(false);
+
   // Mutable ref so the interval always sees the latest turn/game-over state.
   const turnRef = useRef(game.getTurn());
   const overRef = useRef(false);
 
+  // Derived board values — must come AFTER all useState (above) and BEFORE
+  // any effect that reads `gameOver`.
   const board = game.getBoard();
   const turn = game.getTurn();
   const status = game.getStatus();
@@ -74,6 +89,56 @@ export default function App() {
   overRef.current = gameOver;
 
   const aiColor = playerColor === "w" ? "b" : "w";
+
+  useEffect(() => {
+    if (!gameOver) {
+      setShowResult(false);
+      return;
+    }
+    const id = setTimeout(() => setShowResult(true), 1000);
+    return () => clearTimeout(id);
+  }, [gameOver]);
+  // Win probability per move: 50 + 50 * (2 / (1 + exp(-0.003682 * cp)) - 1),
+  // accuracy = average of (playedWin% / bestWin%) * 100 (lichess-style).
+  useEffect(() => {
+    if (!gameOver) return;
+    const moves = game.getHistory();
+    if (moves.length === 0) return;
+    let cancelled = false;
+    setAnalyzing(true);
+    setAccuracy({ w: null, b: null });
+    (async () => {
+      try {
+        const { Chess } = await import("chess.js");
+        const replay = new Chess();
+        const losses = { w: [], b: [] };
+        for (const mv of moves) {
+          const fenBefore = replay.fen();
+          const best = await getEvaluation(fenBefore);
+          if (cancelled) return;
+          replay.move({ from: mv.from, to: mv.to, promotion: mv.promotion || "q" });
+          const after = await getEvaluation(replay.fen());
+          if (cancelled) return;
+          if (best === null || after === null) continue;
+          // Scores are White-relative; flip sign for Black's perspective.
+          const sign = mv.color === "w" ? 1 : -1;
+          const bestWp = winPercent(best * sign);
+          const playedWp = winPercent(after * sign);
+          const ratio = bestWp > 0 ? (playedWp / bestWp) * 100 : 100;
+          losses[mv.color].push(Math.max(0, Math.min(100, ratio)));
+        }
+        if (cancelled) return;
+        const avg = (arr) =>
+          arr.length === 0 ? null : Math.round(arr.reduce((a, b) => a + b, 0) / arr.length);
+        setAccuracy({ w: avg(losses.w), b: avg(losses.b) });
+      } finally {
+        if (!cancelled) setAnalyzing(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [gameOver]);
 
   /** Tick the active player's clock once per second (skipped in ∞ mode). */
   useEffect(() => {
@@ -244,6 +309,8 @@ export default function App() {
     setTimeoutLoser(null);
     setGameStarted(false);
     setAiThinking(false);
+    setAccuracy({ w: null, b: null });
+    setAnalyzing(false);
   }
 
   /** Reset the game to the starting position. */
@@ -261,6 +328,8 @@ export default function App() {
     setTimeoutLoser(null);
     setGameStarted(false);
     setAiThinking(false);
+    setAccuracy({ w: null, b: null });
+    setAnalyzing(false);
   }
 
   /** Back to the landing screen (menu remounts, board hidden, clocks stopped). */
@@ -278,6 +347,8 @@ export default function App() {
     setVsAI(false);
     setPlayerColor(null);
     setScreen("landing");
+    setAccuracy({ w: null, b: null });
+    setAnalyzing(false);
   }
 
   /** Reset the game to the starting position. */
@@ -331,6 +402,28 @@ export default function App() {
   const showLanding = screen === "landing";
   const showSetup = screen === "setup";
   const showGame = screen === "game";
+
+  // Post-match result: winner by checkmate/timeout, or draw.
+  const resultTitle = chessOver
+    ? status === "Draw"
+      ? "SERI"
+      : game.getTurn() === "w"
+        ? "HITAM MENANG"
+        : "PUTIH MENANG"
+    : timeoutLoser !== null
+      ? timeoutLoser === "w"
+        ? "HITAM MENANG"
+        : "PUTIH MENANG"
+      : null;
+  const resultReason = chessOver
+    ? status === "Draw"
+      ? "Permainan berakhir seri"
+      : "Skakmat — raja tidak bisa lolos"
+    : timeoutLoser !== null
+      ? timeoutMessage
+      : "";
+  const capturedByWhite = history.filter((m) => m.color === "w" && m.captured).length;
+  const capturedByBlack = history.filter((m) => m.color === "b" && m.captured).length;
 
   return (
     <main className="app">
@@ -474,6 +567,21 @@ export default function App() {
 
         <InfoPanel history={history} />
       </div>
+      )}
+
+      {showGame && gameOver && showResult && resultTitle && (
+        <PostMatchScreen
+          title={resultTitle}
+          reason={resultReason}
+          totalMoves={history.length}
+          clocks={clocks}
+          capturedByWhite={capturedByWhite}
+          capturedByBlack={capturedByBlack}
+          accuracy={accuracy}
+          analyzing={analyzing}
+          onRematch={handleReset}
+          onMenu={handleBackToMenu}
+        />
       )}
 
       <footer className="app__footer">

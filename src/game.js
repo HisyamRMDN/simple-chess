@@ -73,6 +73,25 @@ export function getCheckSquare() {
   return null;
 }
 
+/** Take back the last move; returns it or null. Used for accuracy analysis. */
+export function undoMove() {
+  try {
+    return chess.undo();
+  } catch {
+    return null;
+  }
+}
+
+/** Load a position from FEN (used to replay moves for accuracy analysis). */
+export function loadFen(fen) {
+  try {
+    chess.load(fen);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** Return verbose move history: [{color, san, captured, ...}] in play order. */
 
 /** Return the piece on a square: {type, color} or null. */
