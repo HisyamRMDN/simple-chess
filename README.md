@@ -54,34 +54,38 @@
 ## About The Project
 
 <!-- SCREENSHOT PLACEHOLDER -->
-[![Product Name Screen Shot][product-screenshot]](https://example.com)
+<p align="center">
+  <img src="./assets/screenshot/menu.png" width="31%" alt="Landing Menu" />
+  <img src="./assets/screenshot/setup.png" width="31%" alt="Setup Screen" />
+  <img src="./assets/screenshot/gameplay.png" width="31%" alt="Gameplay Screen" />
+</p>
 
-Vibe Chess is not just another chess clone. It is a thoughtfully designed, immersive web chess experience built from the ground up to provide both casual and competitive players with a beautiful environment to play, practice, and focus. 
+Vibe Chess is not just another chess clone. It is a thoughtfully designed, immersive web chess experience built from the ground up to provide both casual and competitive players with a beautiful environment to play, practice, and focus.
 
 Whether you are analyzing deep lines against the integrated Stockfish engine or playing a quick blitz match with a friend locally, Vibe Chess delivers a smooth, responsive, and distraction-free interface.
 
 ### Built With
 
-* [![React][React.js]][React-url]
-* [![Vite][Vite.js]][Vite-url]
-* [![Tailwind][Tailwind.js]][Tailwind-url]
-* **Chess.js** (Move validation & logic)
-* **Stockfish.js** (Advanced AI Engine)
+- [![React][React.js]][React-url]
+- [![Vite][Vite.js]][Vite-url]
+- [![Tailwind][Tailwind.js]][Tailwind-url]
+- **Chess.js** (Move validation & logic)
+- **Stockfish.js** (Advanced AI Engine)
 
 ## Features
 
-* ♟️ **Versatile Game Modes**
-  * **Local PvP:** Play face-to-face on the same screen.
-  * **Player vs Engine:** Test your mettle against Stockfish with variable difficulty and human-like artificial move delays.
-* ⏱️ **Precision Time Controls**
-  * Support for Bullet, Blitz, Rapid, and Classical time formats, plus an Unlimited mode for deep analysis.
-* 🎨 **Immersive UI/UX**
-  * **Dynamic Theming:** Seamless Dark and Light mode transitions (persisted via LocalStorage).
-  * **Focus Mode BGM:** Built-in Lo-Fi/ambient background music toggle.
-  * **Modern Navigation:** Smooth transitions from Landing to Setup, straight into the Action.
-* ⚙️ **Quality of Life**
-  * Dynamic board flipping based on selected color (White/Black/Random).
-  * Legal move highlights and last-move indicators.
+- ♟️ **Versatile Game Modes**
+    - **Local PvP:** Play face-to-face on the same screen.
+    - **Player vs Engine:** Test your mettle against Stockfish with variable difficulty and human-like artificial move delays.
+- ⏱️ **Precision Time Controls**
+    - Support for Bullet, Blitz, Rapid, and Classical time formats, plus an Unlimited mode for deep analysis.
+- 🎨 **Immersive UI/UX**
+    - **Dynamic Theming:** Seamless Dark and Light mode transitions (persisted via LocalStorage).
+    - **Focus Mode BGM:** Built-in Lo-Fi/ambient background music toggle.
+    - **Modern Navigation:** Smooth transitions from Landing to Setup, straight into the Action.
+- ⚙️ **Quality of Life**
+    - Dynamic board flipping based on selected color (White/Black/Random).
+    - Legal move highlights and last-move indicators.
 
 ## Getting Started
 
@@ -90,29 +94,30 @@ To get a local copy up and running, follow these simple steps.
 ### Prerequisites
 
 Ensure you have the latest LTS version of Node.js and npm installed.
-* npm
-  ```sh
-  npm install npm@latest -g
-  ```
+
+- npm
+    ```sh
+    npm install npm@latest -g
+    ```
 
 ### Installation
 
 1. Clone the repo
-   ```sh
-   git clone https://github.com/yourusername/chess-vibe.git
-   ```
+    ```sh
+    git clone https://github.com/yourusername/chess-vibe.git
+    ```
 2. Navigate into the directory
-   ```sh
-   cd chess-vibe
-   ```
+    ```sh
+    cd chess-vibe
+    ```
 3. Install NPM packages
-   ```sh
-   npm install
-   ```
+    ```sh
+    npm install
+    ```
 4. Start the development server
-   ```sh
-   npm run dev
-   ```
+    ```sh
+    npm run dev
+    ```
 
 ## Project Structure
 
@@ -160,9 +165,11 @@ If you have a suggestion that would make this better, please fork the repo and c
 Distributed under the MIT License. See `LICENSE.txt` for more information.
 
 ---
-*Crafted with passion using AI Vibe Coding.*
+
+_Crafted with passion using AI Vibe Coding._
 
 <!-- MARKDOWN LINKS & IMAGES -->
+
 [product-screenshot]: https://via.placeholder.com/1000x500.png?text=Vibe+Chess+Screenshot+Here
 [React.js]: https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react&logoColor=61DAFB
 [React-url]: https://reactjs.org/
