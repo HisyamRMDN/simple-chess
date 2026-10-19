@@ -2,46 +2,35 @@
 import React from "react";
 
 const PIECES = {
-  w: { k: "♔", q: "♕", r: "♖", b: "♗", n: "♘", p: "♙" },
-  b: { k: "♚", q: "♛", r: "♜", b: "♝", n: "♞", p: "♟" },
+    w: { k: "♔", q: "♕", r: "♖", b: "♗", n: "♘", p: "♙" },
+    b: { k: "♚", q: "♛", r: "♜", b: "♝", n: "♞", p: "♟" },
 };
 
 /** Board grid; props: board matrix, selectedSquare, legalTargets, checkSquare, theme, flipped, onSquareClick. */
 export default function Board({ board, selectedSquare, legalTargets, checkSquare, theme, flipped, onSquareClick }) {
-  // Flip orientation: black at bottom shows ranks 1→8 and files h→a.
-  const rows = flipped ? [...board].reverse() : board;
-  return (
-    <div className={`board board--${theme}`} role="grid" aria-label="Chess board">
-      {rows.map((row, rowIndex) => {
-        const cells = flipped ? [...row].reverse() : row;
-        return cells.map((cell, colIndex) => {
-          // Map grid position back to real square name.
-          const rankIndex = flipped ? 7 - rowIndex : rowIndex;
-          const fileIndex = flipped ? 7 - colIndex : colIndex;
-          const name = "abcdefgh"[fileIndex] + (8 - rankIndex);
-          const isLight = (rankIndex + fileIndex) % 2 === 0;
-          let className = `square ${isLight ? "square--light" : "square--dark"}`;
-          if (name === selectedSquare) className += " square--selected";
-          if (legalTargets.includes(name)) className += " square--move";
-          if (name === checkSquare) className += " square--check";
-          return (
-            <div
-              key={name}
-              className={className}
-              role="gridcell"
-              onClick={() => onSquareClick(name)}
-            >
-              {cell && (
-                <span
-                  className={`piece piece--${cell.color === "w" ? "white" : "black"}`}
-                >
-                  {PIECES[cell.color][cell.type]}
-                </span>
-              )}
-            </div>
-          );
-        });
-      })}
-    </div>
-  );
+    // Flip orientation: black at bottom shows ranks 1→8 and files h→a.
+    const rows = flipped ? [...board].reverse() : board;
+    return (
+        <div className={`board board--${theme}`} role="grid" aria-label="Chess board">
+            {rows.map((row, rowIndex) => {
+                const cells = flipped ? [...row].reverse() : row;
+                return cells.map((cell, colIndex) => {
+                    // Map grid position back to real square name.
+                    const rankIndex = flipped ? 7 - rowIndex : rowIndex;
+                    const fileIndex = flipped ? 7 - colIndex : colIndex;
+                    const name = "abcdefgh"[fileIndex] + (8 - rankIndex);
+                    const isLight = (rankIndex + fileIndex) % 2 === 0;
+                    let className = `square ${isLight ? "square--light" : "square--dark"}`;
+                    if (name === selectedSquare) className += " square--selected";
+                    if (legalTargets.includes(name)) className += " square--move";
+                    if (name === checkSquare) className += " square--check";
+                    return (
+                        <div key={name} className={className} role="gridcell" onClick={() => onSquareClick(name)}>
+                            {cell && <span className={`piece piece--${cell.color === "w" ? "white" : "black"}`}>{PIECES[cell.color][cell.type]}</span>}
+                        </div>
+                    );
+                });
+            })}
+        </div>
+    );
 }

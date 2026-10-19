@@ -15,9 +15,9 @@ import { playMoveSound, playCaptureSound, playCheckSound, setSoundEnabled } from
 
 /** Available board themes for the dropdown. */
 const THEMES = [
-  { id: "classic", label: "Klasik (Hijau - Krem)" },
-  { id: "wood", label: "Kayu (Cokelat)" },
-  { id: "dark", label: "Dark Mode" },
+    { id: "classic", label: "Klasik (Hijau - Krem)" },
+    { id: "wood", label: "Kayu (Cokelat)" },
+    { id: "dark", label: "Dark Mode" },
 ];
 
 /** Starting time per player in seconds (Blitz 5+0). */
@@ -25,584 +25,527 @@ const START_SECONDS = 5 * 60;
 
 /** Win probability (%) from a centipawn score (lichess formula). */
 function winPercent(cp) {
-  return 50 + 50 * (2 / (1 + Math.exp(-0.003682 * cp)) - 1);
+    return 50 + 50 * (2 / (1 + Math.exp(-0.003682 * cp)) - 1);
 }
 
 export default function App() {
-  // ── 1. ALL useState FIRST (nothing may read derived values above this) ──
-  // fen triggers re-render after each move; board derived from game layer.
-  const [fen, setFen] = useState(game.getFen());
-  const [selectedSquare, setSelectedSquare] = useState(null);
-  const [legalTargets, setLegalTargets] = useState([]);
-  const [soundOn, setSoundOn] = useState(true);
-  const [theme, setTheme] = useState("classic");
-  // Global app theme: "light" | "dark" (board colors untouched).
-  const [mode, setMode] = useState("light");
-  // Blitz clocks (seconds left). Keys: "w" = white, "b" = black.
-  // null = no clock (∞ mode from the menu).
-  const [clocks, setClocks] = useState({ w: 5 * 60, b: 5 * 60 });
-  // Loser color on timeout: "w" | "b" | null. Locks the board while set.
-  const [timeoutLoser, setTimeoutLoser] = useState(null);
-  // Game starts ticking only after the first move is made.
-  const [gameStarted, setGameStarted] = useState(false);
-  // AI mode: true = Stockfish plays opposite color; false = local 2 players.
-  const [vsAI, setVsAI] = useState(false);
-  // Screen flow: "landing" -> "setup" -> "game".
-  const [screen, setScreen] = useState("landing");
-  // Settings modal visibility (openable from landing + game screens).
-  const [showSettings, setShowSettings] = useState(false);
-  // BGM + SFX switches. BGM starts only after the first user click.
-  const [bgmOn, setBgmOn] = useState(true);
-  const [audioUnlocked, setAudioUnlocked] = useState(false);
-  // Player color (null until a game starts; board/timer hidden).
-  const [playerColor, setPlayerColor] = useState(null);
-  // Difficulty level id (see AI_LEVELS in stockfish.js), default Menengah.
-  const [aiLevel, setAiLevel] = useState("medium");
-  // True while Stockfish is thinking; locks the board and shows a hint.
-  const [aiThinking, setAiThinking] = useState(false);
-  // Pending promotion: {from, to} held while the choice modal is open.
-  // The move is NOT executed until the player picks a piece.
-  const [pendingPromo, setPendingPromo] = useState(null);
-  // Post-match accuracy (% per color, null = unavailable/analyzing).
-  const [accuracy, setAccuracy] = useState({ w: null, b: null });
-  const [analyzing, setAnalyzing] = useState(false);
-  // Delay the scoreboard ~1s so the final move/sound registers first.
-  const [showResult, setShowResult] = useState(false);
+    // ── 1. ALL useState FIRST (nothing may read derived values above this) ──
+    // fen triggers re-render after each move; board derived from game layer.
+    const [fen, setFen] = useState(game.getFen());
+    const [selectedSquare, setSelectedSquare] = useState(null);
+    const [legalTargets, setLegalTargets] = useState([]);
+    const [soundOn, setSoundOn] = useState(true);
+    const [theme, setTheme] = useState("classic");
+    // Global app theme: "light" | "dark" (board colors untouched).
+    const [mode, setMode] = useState("light");
+    // Blitz clocks (seconds left). Keys: "w" = white, "b" = black.
+    // null = no clock (∞ mode from the menu).
+    const [clocks, setClocks] = useState({ w: 5 * 60, b: 5 * 60 });
+    // Loser color on timeout: "w" | "b" | null. Locks the board while set.
+    const [timeoutLoser, setTimeoutLoser] = useState(null);
+    // Game starts ticking only after the first move is made.
+    const [gameStarted, setGameStarted] = useState(false);
+    // AI mode: true = Stockfish plays opposite color; false = local 2 players.
+    const [vsAI, setVsAI] = useState(false);
+    // Screen flow: "landing" -> "setup" -> "game".
+    const [screen, setScreen] = useState("landing");
+    // Settings modal visibility (openable from landing + game screens).
+    const [showSettings, setShowSettings] = useState(false);
+    // BGM + SFX switches. BGM starts only after the first user click.
+    const [bgmOn, setBgmOn] = useState(true);
+    const [audioUnlocked, setAudioUnlocked] = useState(false);
+    // Player color (null until a game starts; board/timer hidden).
+    const [playerColor, setPlayerColor] = useState(null);
+    // Difficulty level id (see AI_LEVELS in stockfish.js), default Menengah.
+    const [aiLevel, setAiLevel] = useState("medium");
+    // True while Stockfish is thinking; locks the board and shows a hint.
+    const [aiThinking, setAiThinking] = useState(false);
+    // Pending promotion: {from, to} held while the choice modal is open.
+    // The move is NOT executed until the player picks a piece.
+    const [pendingPromo, setPendingPromo] = useState(null);
+    // Post-match accuracy (% per color, null = unavailable/analyzing).
+    const [accuracy, setAccuracy] = useState({ w: null, b: null });
+    const [analyzing, setAnalyzing] = useState(false);
+    // Delay the scoreboard ~1s so the final move/sound registers first.
+    const [showResult, setShowResult] = useState(false);
 
-  // Mutable ref so the interval always sees the latest turn/game-over state.
-  const turnRef = useRef(game.getTurn());
-  const overRef = useRef(false);
+    // Mutable ref so the interval always sees the latest turn/game-over state.
+    const turnRef = useRef(game.getTurn());
+    const overRef = useRef(false);
 
-  // Derived board values — must come AFTER all useState (above) and BEFORE
-  // any effect that reads `gameOver`.
-  const board = game.getBoard();
-  const turn = game.getTurn();
-  const status = game.getStatus();
-  // Verbose history drives the sidebar (captured pieces + SAN list).
-  const history = game.getHistory();
-  // Square of the king in check (if any) — gets the red pulse action.
-  const checkSquare = game.getCheckSquare();
-  // Game over by checkmate/draw OR by timeout.
-  const chessOver = status === "Checkmate!" || status === "Draw";
-  const gameOver = chessOver || timeoutLoser !== null;
-  turnRef.current = turn;
-  overRef.current = gameOver;
-
-  const aiColor = playerColor === "w" ? "b" : "w";
-
-  useEffect(() => {
-    if (!gameOver) {
-      setShowResult(false);
-      return;
-    }
-    const id = setTimeout(() => setShowResult(true), 1000);
-    return () => clearTimeout(id);
-  }, [gameOver]);
-  // Win probability per move: 50 + 50 * (2 / (1 + exp(-0.003682 * cp)) - 1),
-  // accuracy = average of (playedWin% / bestWin%) * 100 (lichess-style).
-  useEffect(() => {
-    if (!gameOver) return;
-    const moves = game.getHistory();
-    if (moves.length === 0) return;
-    let cancelled = false;
-    setAnalyzing(true);
-    setAccuracy({ w: null, b: null });
-    (async () => {
-      try {
-        const { Chess } = await import("chess.js");
-        const replay = new Chess();
-        const losses = { w: [], b: [] };
-        for (const mv of moves) {
-          const fenBefore = replay.fen();
-          const best = await getEvaluation(fenBefore);
-          if (cancelled) return;
-          replay.move({ from: mv.from, to: mv.to, promotion: mv.promotion || "q" });
-          const after = await getEvaluation(replay.fen());
-          if (cancelled) return;
-          if (best === null || after === null) continue;
-          // Scores are White-relative; flip sign for Black's perspective.
-          const sign = mv.color === "w" ? 1 : -1;
-          const bestWp = winPercent(best * sign);
-          const playedWp = winPercent(after * sign);
-          const ratio = bestWp > 0 ? (playedWp / bestWp) * 100 : 100;
-          losses[mv.color].push(Math.max(0, Math.min(100, ratio)));
-        }
-        if (cancelled) return;
-        const avg = (arr) =>
-          arr.length === 0 ? null : Math.round(arr.reduce((a, b) => a + b, 0) / arr.length);
-        setAccuracy({ w: avg(losses.w), b: avg(losses.b) });
-      } finally {
-        if (!cancelled) setAnalyzing(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [gameOver]);
-
-  /** Tick the active player's clock once per second (skipped in ∞ mode). */
-  useEffect(() => {
-    const id = setInterval(() => {
-      if (!gameStarted || overRef.current) return;
-      const active = turnRef.current;
-      setClocks((prev) => {
-        if (prev[active] === null || prev[active] <= 0) return prev;
-        const next = { ...prev, [active]: prev[active] - 1 };
-        if (next[active] <= 0) setTimeoutLoser(active);
-        return next;
-      });
-    }, 1000);
-    return () => clearInterval(id);
-  }, [gameStarted]);
-
-  /** Play the right sound for a completed move. */
-  function playSoundFor(move) {
+    // Derived board values — must come AFTER all useState (above) and BEFORE
+    // any effect that reads `gameOver`.
+    const board = game.getBoard();
+    const turn = game.getTurn();
     const status = game.getStatus();
-    if (status === "Checkmate!") playCheckSound(true);
-    else if (status === "Check!") playCheckSound(false);
-    else if (move.flags.includes("c") || move.flags.includes("e")) playCaptureSound();
-    else playMoveSound();
-  }
+    // Verbose history drives the sidebar (captured pieces + SAN list).
+    const history = game.getHistory();
+    // Square of the king in check (if any) — gets the red pulse action.
+    const checkSquare = game.getCheckSquare();
+    // Game over by checkmate/draw OR by timeout.
+    const chessOver = status === "Checkmate!" || status === "Draw";
+    const gameOver = chessOver || timeoutLoser !== null;
+    turnRef.current = turn;
+    overRef.current = gameOver;
 
-  // In AI mode the engine plays the opposite color. If the player is Black,
-  // Stockfish (White) automatically takes the first move on game start.
-  // The engine runs inside a Web Worker, so the UI stays responsive.
-  // A human-like delay (0.5–2s) + locked board + indicator make it feel natural.
-  const aiLevelRef = useRef(aiLevel);
-  aiLevelRef.current = aiLevel;
-  useEffect(() => {
-    if (!vsAI || playerColor === null || gameOver || game.getTurn() !== aiColor) return;
-    let cancelled = false;
-    let delayId = null;
-    const level =
-      AI_LEVELS.find((l) => l.id === aiLevelRef.current) ?? AI_LEVELS[2];
-    // Lock the board + show "thinking" immediately, before the engine reply.
-    setAiThinking(true);
-    getBestMove(game.getFen(), level)
-      .then((uci) => {
-        if (cancelled) return;
-        // Random thinking pause so the bot doesn't feel instant.
-        const pause = 500 + Math.random() * 1500;
-        delayId = setTimeout(() => {
-          if (cancelled) return;
-          const move = game.makeMoveUci(uci);
-          if (move) {
+    const aiColor = playerColor === "w" ? "b" : "w";
+
+    useEffect(() => {
+        if (!gameOver) {
+            setShowResult(false);
+            return;
+        }
+        const id = setTimeout(() => setShowResult(true), 1000);
+        return () => clearTimeout(id);
+    }, [gameOver]);
+    // Win probability per move: 50 + 50 * (2 / (1 + exp(-0.003682 * cp)) - 1),
+    // accuracy = average of (playedWin% / bestWin%) * 100 (lichess-style).
+    useEffect(() => {
+        if (!gameOver) return;
+        const moves = game.getHistory();
+        if (moves.length === 0) return;
+        let cancelled = false;
+        setAnalyzing(true);
+        setAccuracy({ w: null, b: null });
+        (async () => {
+            try {
+                const { Chess } = await import("chess.js");
+                const replay = new Chess();
+                const losses = { w: [], b: [] };
+                for (const mv of moves) {
+                    const fenBefore = replay.fen();
+                    const best = await getEvaluation(fenBefore);
+                    if (cancelled) return;
+                    replay.move({ from: mv.from, to: mv.to, promotion: mv.promotion || "q" });
+                    const after = await getEvaluation(replay.fen());
+                    if (cancelled) return;
+                    if (best === null || after === null) continue;
+                    // Scores are White-relative; flip sign for Black's perspective.
+                    const sign = mv.color === "w" ? 1 : -1;
+                    const bestWp = winPercent(best * sign);
+                    const playedWp = winPercent(after * sign);
+                    const ratio = bestWp > 0 ? (playedWp / bestWp) * 100 : 100;
+                    losses[mv.color].push(Math.max(0, Math.min(100, ratio)));
+                }
+                if (cancelled) return;
+                const avg = (arr) => (arr.length === 0 ? null : Math.round(arr.reduce((a, b) => a + b, 0) / arr.length));
+                setAccuracy({ w: avg(losses.w), b: avg(losses.b) });
+            } finally {
+                if (!cancelled) setAnalyzing(false);
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, [gameOver]);
+
+    /** Tick the active player's clock once per second (skipped in ∞ mode). */
+    useEffect(() => {
+        const id = setInterval(() => {
+            if (!gameStarted || overRef.current) return;
+            const active = turnRef.current;
+            setClocks((prev) => {
+                if (prev[active] === null || prev[active] <= 0) return prev;
+                const next = { ...prev, [active]: prev[active] - 1 };
+                if (next[active] <= 0) setTimeoutLoser(active);
+                return next;
+            });
+        }, 1000);
+        return () => clearInterval(id);
+    }, [gameStarted]);
+
+    /** Play the right sound for a completed move. */
+    function playSoundFor(move) {
+        const status = game.getStatus();
+        if (status === "Checkmate!") playCheckSound(true);
+        else if (status === "Check!") playCheckSound(false);
+        else if (move.flags.includes("c") || move.flags.includes("e")) playCaptureSound();
+        else playMoveSound();
+    }
+
+    // In AI mode the engine plays the opposite color. If the player is Black,
+    // Stockfish (White) automatically takes the first move on game start.
+    // The engine runs inside a Web Worker, so the UI stays responsive.
+    // A human-like delay (0.5–2s) + locked board + indicator make it feel natural.
+    const aiLevelRef = useRef(aiLevel);
+    aiLevelRef.current = aiLevel;
+    useEffect(() => {
+        if (!vsAI || playerColor === null || gameOver || game.getTurn() !== aiColor) return;
+        let cancelled = false;
+        let delayId = null;
+        const level = AI_LEVELS.find((l) => l.id === aiLevelRef.current) ?? AI_LEVELS[2];
+        // Lock the board + show "thinking" immediately, before the engine reply.
+        setAiThinking(true);
+        getBestMove(game.getFen(), level)
+            .then((uci) => {
+                if (cancelled) return;
+                // Random thinking pause so the bot doesn't feel instant.
+                const pause = 500 + Math.random() * 1500;
+                delayId = setTimeout(() => {
+                    if (cancelled) return;
+                    const move = game.makeMoveUci(uci);
+                    if (move) {
+                        playSoundFor(move);
+                        setFen(game.getFen());
+                    }
+                    setAiThinking(false);
+                }, pause);
+            })
+            .catch(() => {
+                // Engine failed (e.g. offline CDN): fall back to local play
+                // so the game stays playable instead of stalling.
+                if (cancelled) return;
+                const pause = 500 + Math.random() * 1500;
+                delayId = setTimeout(() => {
+                    if (cancelled) return;
+                    const fallback = pickFallbackMove(level);
+                    if (fallback) {
+                        playSoundFor(fallback);
+                        setFen(game.getFen());
+                    }
+                    setAiThinking(false);
+                }, pause);
+            });
+        return () => {
+            cancelled = true;
+            if (delayId) clearTimeout(delayId);
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [fen, vsAI, gameOver, aiColor, playerColor]);
+
+    // Unlock audio on the very first user click anywhere (autoplay policy).
+    useEffect(() => {
+        function unlock() {
+            setAudioUnlocked(true);
+            window.removeEventListener("pointerdown", unlock);
+        }
+        window.addEventListener("pointerdown", unlock);
+        return () => window.removeEventListener("pointerdown", unlock);
+    }, []);
+
+    // Apply global light/dark mode to <html> so CSS variables switch.
+    useEffect(() => {
+        document.documentElement.setAttribute("data-theme", mode);
+    }, [mode]);
+
+    /** Handle square click: select a piece or move to a legal target. */
+    function handleSquareClick(square) {
+        // Locked: not in game screen, game over, AI thinking, or AI's turn.
+        if (screen !== "game" || playerColor === null || gameOver || aiThinking) return;
+        if (vsAI && game.getTurn() !== playerColor) return;
+        // Promotion choice open: only the modal decides the next action.
+        if (pendingPromo) return;
+        if (selectedSquare && legalTargets.includes(square)) {
+            // Pawn reaching the last rank: pause and ask which piece to promote to.
+            if (game.isPromotionMove(selectedSquare, square)) {
+                setPendingPromo({ from: selectedSquare, to: square });
+                setSelectedSquare(null);
+                setLegalTargets([]);
+                return;
+            }
+            const move = game.makeMove(selectedSquare, square);
+            setSelectedSquare(null);
+            setLegalTargets([]);
+            setFen(game.getFen());
+            if (move) {
+                setGameStarted(true);
+                playSoundFor(move);
+            }
+        } else {
+            // In AI mode the player only controls their own color.
+            const piece = game.getPiece(square);
+            if (vsAI && piece && piece.color !== playerColor) {
+                setSelectedSquare(null);
+                setLegalTargets([]);
+                return;
+            }
+            const moves = game.getLegalMoves(square);
+            setSelectedSquare(moves.length > 0 ? square : null);
+            setLegalTargets(moves);
+        }
+    }
+
+    /** Toggle sound on/off. */
+    function handleSoundToggle() {
+        const next = !soundOn;
+        setSoundOn(next);
+        setSoundEnabled(next);
+    }
+
+    /** Run the pending promotion with the chosen piece ("q"|"r"|"n"|"b"). */
+    function handlePromotionPick(piece) {
+        if (!pendingPromo) return;
+        const move = game.makeMove(pendingPromo.from, pendingPromo.to, piece);
+        setPendingPromo(null);
+        setFen(game.getFen());
+        if (move) {
+            setGameStarted(true);
             playSoundFor(move);
-            setFen(game.getFen());
-          }
-          setAiThinking(false);
-        }, pause);
-      })
-      .catch(() => {
-        // Engine failed (e.g. offline CDN): fall back to local play
-        // so the game stays playable instead of stalling.
-        if (cancelled) return;
-        const pause = 500 + Math.random() * 1500;
-        delayId = setTimeout(() => {
-          if (cancelled) return;
-          const fallback = pickFallbackMove(level);
-          if (fallback) {
-            playSoundFor(fallback);
-            setFen(game.getFen());
-          }
-          setAiThinking(false);
-        }, pause);
-      });
-    return () => {
-      cancelled = true;
-      if (delayId) clearTimeout(delayId);
-    };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fen, vsAI, gameOver, aiColor, playerColor]);
-
-  // Unlock audio on the very first user click anywhere (autoplay policy).
-  useEffect(() => {
-    function unlock() {
-      setAudioUnlocked(true);
-      window.removeEventListener("pointerdown", unlock);
+        }
     }
-    window.addEventListener("pointerdown", unlock);
-    return () => window.removeEventListener("pointerdown", unlock);
-  }, []);
 
-  // Apply global light/dark mode to <html> so CSS variables switch.
-  useEffect(() => {
-    document.documentElement.setAttribute("data-theme", mode);
-  }, [mode]);
+    /** Cancel the pending promotion; the pawn stays on its square. */
+    function handlePromotionCancel() {
+        setPendingPromo(null);
+    }
 
-  /** Handle square click: select a piece or move to a legal target. */
-  function handleSquareClick(square) {
-    // Locked: not in game screen, game over, AI thinking, or AI's turn.
-    if (screen !== "game" || playerColor === null || gameOver || aiThinking) return;
-    if (vsAI && game.getTurn() !== playerColor) return;
-    // Promotion choice open: only the modal decides the next action.
-    if (pendingPromo) return;
-    if (selectedSquare && legalTargets.includes(square)) {
-      // Pawn reaching the last rank: pause and ask which piece to promote to.
-      if (game.isPromotionMove(selectedSquare, square)) {
-        setPendingPromo({ from: selectedSquare, to: square });
+    /** Start the game from the setup config; setup unmounts (not hidden). */
+    function handleStartGame(config) {
+        stopEngine();
+        const startSeconds = config.timeMinutes === null ? null : config.timeMinutes * 60;
+        // Local mode: no AI, both sides human (board stays unflipped).
+        setVsAI(config.mode === "ai");
+        setPlayerColor(config.color);
+        setScreen("game");
+        game.resetGame();
         setSelectedSquare(null);
         setLegalTargets([]);
-        return;
-      }
-      const move = game.makeMove(selectedSquare, square);
-      setSelectedSquare(null);
-      setLegalTargets([]);
-      setFen(game.getFen());
-      if (move) {
-        setGameStarted(true);
-        playSoundFor(move);
-      }
-    } else {
-      // In AI mode the player only controls their own color.
-      const piece = game.getPiece(square);
-      if (vsAI && piece && piece.color !== playerColor) {
+        setPendingPromo(null);
+        setFen(game.getFen());
+        setClocks({ w: startSeconds, b: startSeconds });
+        setTimeoutLoser(null);
+        setGameStarted(false);
+        setAiThinking(false);
+        setAccuracy({ w: null, b: null });
+        setAnalyzing(false);
+    }
+
+    /** Reset the game to the starting position. */
+    function handleReset() {
+        stopEngine();
+        game.resetGame();
         setSelectedSquare(null);
         setLegalTargets([]);
-        return;
-      }
-      const moves = game.getLegalMoves(square);
-      setSelectedSquare(moves.length > 0 ? square : null);
-      setLegalTargets(moves);
+        setPendingPromo(null);
+        setFen(game.getFen());
+        setClocks((prev) => {
+            const initial = prev.w === null && prev.b === null ? null : START_SECONDS;
+            return { w: initial, b: initial };
+        });
+        setTimeoutLoser(null);
+        setGameStarted(false);
+        setAiThinking(false);
+        setAccuracy({ w: null, b: null });
+        setAnalyzing(false);
     }
-  }
 
-  /** Toggle sound on/off. */
-  function handleSoundToggle() {
-    const next = !soundOn;
-    setSoundOn(next);
-    setSoundEnabled(next);
-  }
-
-  /** Run the pending promotion with the chosen piece ("q"|"r"|"n"|"b"). */
-  function handlePromotionPick(piece) {
-    if (!pendingPromo) return;
-    const move = game.makeMove(pendingPromo.from, pendingPromo.to, piece);
-    setPendingPromo(null);
-    setFen(game.getFen());
-    if (move) {
-      setGameStarted(true);
-      playSoundFor(move);
+    /** Back to the landing screen (menu remounts, board hidden, clocks stopped). */
+    function handleBackToMenu() {
+        stopEngine();
+        game.resetGame();
+        setSelectedSquare(null);
+        setLegalTargets([]);
+        setPendingPromo(null);
+        setFen(game.getFen());
+        setClocks({ w: START_SECONDS, b: START_SECONDS });
+        setTimeoutLoser(null);
+        setGameStarted(false);
+        setAiThinking(false);
+        setVsAI(false);
+        setPlayerColor(null);
+        setScreen("landing");
+        setAccuracy({ w: null, b: null });
+        setAnalyzing(false);
     }
-  }
 
-  /** Cancel the pending promotion; the pawn stays on its square. */
-  function handlePromotionCancel() {
-    setPendingPromo(null);
-  }
-
-  /** Start the game from the setup config; setup unmounts (not hidden). */
-  function handleStartGame(config) {
-    stopEngine();
-    const startSeconds =
-      config.timeMinutes === null ? null : config.timeMinutes * 60;
-    // Local mode: no AI, both sides human (board stays unflipped).
-    setVsAI(config.mode === "ai");
-    setPlayerColor(config.color);
-    setScreen("game");
-    game.resetGame();
-    setSelectedSquare(null);
-    setLegalTargets([]);
-    setPendingPromo(null);
-    setFen(game.getFen());
-    setClocks({ w: startSeconds, b: startSeconds });
-    setTimeoutLoser(null);
-    setGameStarted(false);
-    setAiThinking(false);
-    setAccuracy({ w: null, b: null });
-    setAnalyzing(false);
-  }
-
-  /** Reset the game to the starting position. */
-  function handleReset() {
-    stopEngine();
-    game.resetGame();
-    setSelectedSquare(null);
-    setLegalTargets([]);
-    setPendingPromo(null);
-    setFen(game.getFen());
-    setClocks((prev) => {
-      const initial = prev.w === null && prev.b === null ? null : START_SECONDS;
-      return { w: initial, b: initial };
-    });
-    setTimeoutLoser(null);
-    setGameStarted(false);
-    setAiThinking(false);
-    setAccuracy({ w: null, b: null });
-    setAnalyzing(false);
-  }
-
-  /** Back to the landing screen (menu remounts, board hidden, clocks stopped). */
-  function handleBackToMenu() {
-    stopEngine();
-    game.resetGame();
-    setSelectedSquare(null);
-    setLegalTargets([]);
-    setPendingPromo(null);
-    setFen(game.getFen());
-    setClocks({ w: START_SECONDS, b: START_SECONDS });
-    setTimeoutLoser(null);
-    setGameStarted(false);
-    setAiThinking(false);
-    setVsAI(false);
-    setPlayerColor(null);
-    setScreen("landing");
-    setAccuracy({ w: null, b: null });
-    setAnalyzing(false);
-  }
-
-  /** Reset the game to the starting position. */
-  function handleReset() {
-    stopEngine();
-    game.resetGame();
-    setSelectedSquare(null);
-    setLegalTargets([]);
-    setPendingPromo(null);
-    setFen(game.getFen());
-    setClocks({ w: START_SECONDS, b: START_SECONDS });
-    setTimeoutLoser(null);
-    setGameStarted(false);
-    setAiThinking(false);
-  }
-
-  // Local fallback if the CDN engine is unreachable: weak levels sometimes
-  // play a random move (blunder), stronger levels prefer captures,
-  // otherwise play a random legal move (keeps the game going offline).
-  function pickFallbackMove(level = AI_LEVELS[2]) {
-    const moves = game.getAllMoves();
-    if (moves.length === 0) return null;
-    if (Math.random() < level.blunder) {
-      const pick = moves[Math.floor(Math.random() * moves.length)];
-      return game.makeMove(pick.from, pick.to);
+    /** Reset the game to the starting position. */
+    function handleReset() {
+        stopEngine();
+        game.resetGame();
+        setSelectedSquare(null);
+        setLegalTargets([]);
+        setPendingPromo(null);
+        setFen(game.getFen());
+        setClocks({ w: START_SECONDS, b: START_SECONDS });
+        setTimeoutLoser(null);
+        setGameStarted(false);
+        setAiThinking(false);
     }
-    const captures = moves.filter(
-      (m) => m.flags.includes("c") || m.flags.includes("e")
-    );
-    const pool = captures.length > 0 ? captures : moves;
-    const pick = pool[Math.floor(Math.random() * pool.length)];
-    // Preserve Stockfish-style promotion choice if the fallback move promotes.
-    const promotion = pick.promotion || "q";
-    return game.makeMove(pick.from, pick.to, promotion);
-  }
 
-   /** Timeout message, e.g. "Waktu Habis, Putih Kalah". */
-  const timeoutMessage =
-    timeoutLoser !== null
-      ? `Waktu Habis, ${timeoutLoser === "w" ? "Putih" : "Hitam"} Kalah`
-      : "";
+    // Local fallback if the CDN engine is unreachable: weak levels sometimes
+    // play a random move (blunder), stronger levels prefer captures,
+    // otherwise play a random legal move (keeps the game going offline).
+    function pickFallbackMove(level = AI_LEVELS[2]) {
+        const moves = game.getAllMoves();
+        if (moves.length === 0) return null;
+        if (Math.random() < level.blunder) {
+            const pick = moves[Math.floor(Math.random() * moves.length)];
+            return game.makeMove(pick.from, pick.to);
+        }
+        const captures = moves.filter((m) => m.flags.includes("c") || m.flags.includes("e"));
+        const pool = captures.length > 0 ? captures : moves;
+        const pick = pool[Math.floor(Math.random() * pool.length)];
+        // Preserve Stockfish-style promotion choice if the fallback move promotes.
+        const promotion = pick.promotion || "q";
+        return game.makeMove(pick.from, pick.to, promotion);
+    }
 
-  // Timers sit next to the player's own color: bottom = player, top = AI.
-  const topColor = playerColor === "w" ? "b" : "w";
-  const bottomColor = playerColor === "w" ? "w" : "b";
-  const colorLabel = (c) => (c === "w" ? "Putih" : "Hitam");
-  const timeLabel =
-    clocks.w === null ? "Tanpa batas" : `Blitz ${clocks.w !== null ? Math.round((clocks.w + clocks.b) / 120) : ""} mnt`;
+    /** Timeout message, e.g. "Waktu Habis, Putih Kalah". */
+    const timeoutMessage = timeoutLoser !== null ? `Waktu Habis, ${timeoutLoser === "w" ? "Putih" : "Hitam"} Kalah` : "";
 
-  // Overlays mount only on their screen (unmounted, not hidden).
-  const showLanding = screen === "landing";
-  const showSetup = screen === "setup";
-  const showGame = screen === "game";
+    // Timers sit next to the player's own color: bottom = player, top = AI.
+    const topColor = playerColor === "w" ? "b" : "w";
+    const bottomColor = playerColor === "w" ? "w" : "b";
+    const colorLabel = (c) => (c === "w" ? "Putih" : "Hitam");
+    const timeLabel = clocks.w === null ? "Tanpa batas" : `Blitz ${clocks.w !== null ? Math.round((clocks.w + clocks.b) / 120) : ""} mnt`;
 
-  // Post-match result: winner by checkmate/timeout, or draw.
-  const resultTitle = chessOver
-    ? status === "Draw"
-      ? "SERI"
-      : game.getTurn() === "w"
-        ? "HITAM MENANG"
-        : "PUTIH MENANG"
-    : timeoutLoser !== null
-      ? timeoutLoser === "w"
-        ? "HITAM MENANG"
-        : "PUTIH MENANG"
-      : null;
-  const resultReason = chessOver
-    ? status === "Draw"
-      ? "Permainan berakhir seri"
-      : "Skakmat — raja tidak bisa lolos"
-    : timeoutLoser !== null
-      ? timeoutMessage
-      : "";
-  const capturedByWhite = history.filter((m) => m.color === "w" && m.captured).length;
-  const capturedByBlack = history.filter((m) => m.color === "b" && m.captured).length;
+    // Overlays mount only on their screen (unmounted, not hidden).
+    const showLanding = screen === "landing";
+    const showSetup = screen === "setup";
+    const showGame = screen === "game";
 
-  return (
-    <main className="app">
-      {/* Persistent BGM: mounted once, survives all screen changes */}
-      <BackgroundMusic playing={bgmOn} unlocked={audioUnlocked} />
-      {showLanding && (
-        <LandingMenu
-          onPlay={() => setScreen("setup")}
-          onSettings={() => setShowSettings(true)}
-        />
-      )}
-      {showSetup && (
-        <MainMenu
-          onStartGame={handleStartGame}
-          onBack={() => setScreen("landing")}
-        />
-      )}
-      {showSettings && (
-        <SettingsModal
-          bgmOn={bgmOn}
-          soundOn={soundOn}
-          darkMode={mode === "dark"}
-          onToggleBgm={() => setBgmOn((v) => !v)}
-          onToggleSound={() => setSoundOn((v) => !v)}
-          onToggleMode={() => setMode(mode === "light" ? "dark" : "light")}
-          onClose={() => setShowSettings(false)}
-        />
-      )}
+    // Post-match result: winner by checkmate/timeout, or draw.
+    const resultTitle = chessOver
+        ? status === "Draw"
+            ? "SERI"
+            : game.getTurn() === "w"
+              ? "HITAM MENANG"
+              : "PUTIH MENANG"
+        : timeoutLoser !== null
+          ? timeoutLoser === "w"
+              ? "HITAM MENANG"
+              : "PUTIH MENANG"
+          : null;
+    const resultReason = chessOver ? (status === "Draw" ? "Permainan berakhir seri" : "Skakmat — raja tidak bisa lolos") : timeoutLoser !== null ? timeoutMessage : "";
+    const capturedByWhite = history.filter((m) => m.color === "w" && m.captured).length;
+    const capturedByBlack = history.filter((m) => m.color === "b" && m.captured).length;
 
-      <header className="app__header">
-        <div className="app__header-text">
-          <h1>Vibe Chess</h1>
-          <p className="app__subtitle">
-            {playerColor === null
-              ? "Atur permainan untuk mulai · React"
-              : `${vsAI ? `Main vs AI (kamu ${playerColor === "w" ? "Putih" : "Hitam"})` : "Lokal 2 pemain"} · ${timeLabel}`}
-          </p>
-        </div>
-        <button
-          className="mode-toggle"
-          type="button"
-          onClick={() => setShowSettings(true)}
-          title="Buka Pengaturan"
-          aria-label="Buka Pengaturan"
-        >
-          ⚙️
-        </button>
-      </header>
-
-      <section className="status" aria-live="polite">
-        <span className="status__turn">
-          {turn === "w" ? "White to move" : "Black to move"}
-        </span>
-        <span className={`status__state${status === "Check!" || status === "Checkmate!" ? " status__state--alert" : ""}`}>{timeoutMessage || status}</span>
-        {aiThinking && (
-          <span className="status__ai">
-            <span className="spinner" aria-hidden="true" />
-            Komputer sedang berpikir…
-          </span>
-        )}
-      </section>
-
-      <label className="theme-picker">
-        <span className="theme-picker__label">Tema</span>
-        <select
-          className="theme-picker__select"
-          value={theme}
-          onChange={(e) => setTheme(e.target.value)}
-          aria-label="Board theme"
-        >
-          {THEMES.map((t) => (
-            <option key={t.id} value={t.id}>
-              {t.label}
-            </option>
-          ))}
-        </select>
-      </label>
-
-      {vsAI && (
-        <label className="theme-picker">
-          <span className="theme-picker__label">Level AI</span>
-          <select
-            className="theme-picker__select"
-            value={aiLevel}
-            onChange={(e) => {
-              setAiLevel(e.target.value);
-              stopEngine();
-            }}
-            aria-label="AI difficulty level"
-          >
-            {AI_LEVELS.map((l) => (
-              <option key={l.id} value={l.id}>
-                {l.label}
-              </option>
-            ))}
-          </select>
-        </label>
-      )}
-
-      {showGame && (
-      <div className="game">
-        <div className="game__board-col">
-          {clocks[topColor] !== null && (
-          <Timer
-            label={colorLabel(topColor)}
-            seconds={clocks[topColor]}
-            active={gameStarted && !gameOver && turn === topColor}
-            expired={timeoutLoser === topColor}
-          />
-          )}
-
-          <div className="board-wrap">
-            <Board
-              board={board}
-              selectedSquare={selectedSquare}
-              legalTargets={legalTargets}
-              checkSquare={checkSquare}
-              theme={theme}
-              flipped={playerColor === "b"}
-              onSquareClick={handleSquareClick}
-            />
-            {pendingPromo && (
-              <PromotionModal
-                color={turn}
-                target={pendingPromo.to}
-                onPick={handlePromotionPick}
-                onCancel={handlePromotionCancel}
-              />
+    return (
+        <main className="app">
+            {/* Persistent BGM: mounted once, survives all screen changes */}
+            <BackgroundMusic playing={bgmOn} unlocked={audioUnlocked} />
+            {showLanding && <LandingMenu onPlay={() => setScreen("setup")} onSettings={() => setShowSettings(true)} />}
+            {showSetup && <MainMenu onStartGame={handleStartGame} onBack={() => setScreen("landing")} />}
+            {showSettings && (
+                <SettingsModal
+                    bgmOn={bgmOn}
+                    soundOn={soundOn}
+                    darkMode={mode === "dark"}
+                    onToggleBgm={() => setBgmOn((v) => !v)}
+                    onToggleSound={() => setSoundOn((v) => !v)}
+                    onToggleMode={() => setMode(mode === "light" ? "dark" : "light")}
+                    onClose={() => setShowSettings(false)}
+                />
             )}
-          </div>
 
-          {clocks[bottomColor] !== null && (
-          <Timer
-            label={`${colorLabel(bottomColor)}${vsAI ? " (Kamu)" : ""}`}
-            seconds={clocks[bottomColor]}
-            active={gameStarted && !gameOver && turn === bottomColor}
-            expired={timeoutLoser === bottomColor}
-          />
-          )}
-        </div>
+            <header className="app__header">
+                <div className="app__header-text">
+                    <h1>Vibe Chess</h1>
+                    <p className="app__subtitle">
+                        {playerColor === null ? "Atur permainan untuk mulai · React" : `${vsAI ? `Main vs AI (kamu ${playerColor === "w" ? "Putih" : "Hitam"})` : "Lokal 2 pemain"} · ${timeLabel}`}
+                    </p>
+                </div>
+                <button className="mode-toggle" type="button" onClick={() => setShowSettings(true)} title="Buka Pengaturan" aria-label="Buka Pengaturan">
+                    ⚙️
+                </button>
+            </header>
 
-        <InfoPanel history={history} />
-      </div>
-      )}
+            <section className="status" aria-live="polite">
+                <span className="status__turn">{turn === "w" ? "White to move" : "Black to move"}</span>
+                <span className={`status__state${status === "Check!" || status === "Checkmate!" ? " status__state--alert" : ""}`}>{timeoutMessage || status}</span>
+                {aiThinking && (
+                    <span className="status__ai">
+                        <span className="spinner" aria-hidden="true" />
+                        Komputer sedang berpikir…
+                    </span>
+                )}
+            </section>
 
-      {showGame && gameOver && showResult && resultTitle && (
-        <PostMatchScreen
-          title={resultTitle}
-          reason={resultReason}
-          totalMoves={history.length}
-          clocks={clocks}
-          capturedByWhite={capturedByWhite}
-          capturedByBlack={capturedByBlack}
-          accuracy={accuracy}
-          analyzing={analyzing}
-          onRematch={handleReset}
-          onMenu={handleBackToMenu}
-        />
-      )}
+            <label className="theme-picker">
+                <span className="theme-picker__label">Tema</span>
+                <select className="theme-picker__select" value={theme} onChange={(e) => setTheme(e.target.value)} aria-label="Board theme">
+                    {THEMES.map((t) => (
+                        <option key={t.id} value={t.id}>
+                            {t.label}
+                        </option>
+                    ))}
+                </select>
+            </label>
 
-      <footer className="app__footer">
-        {showGame && (
-        <button className="btn" type="button" onClick={handleReset}>
-          Reset Game
-        </button>
-        )}
-        {showGame && (
-        <button
-          className="btn btn--ghost"
-          type="button"
-          onClick={handleBackToMenu}
-        >
-          Menu Utama
-        </button>
-        )}
-        <button className="btn btn--ghost" type="button" onClick={handleSoundToggle}>
-          {soundOn ? "Mute Sound" : "Unmute Sound"}
-        </button>
-      </footer>
-    </main>
-  );
+            {vsAI && (
+                <label className="theme-picker">
+                    <span className="theme-picker__label">Level AI</span>
+                    <select
+                        className="theme-picker__select"
+                        value={aiLevel}
+                        onChange={(e) => {
+                            setAiLevel(e.target.value);
+                            stopEngine();
+                        }}
+                        aria-label="AI difficulty level">
+                        {AI_LEVELS.map((l) => (
+                            <option key={l.id} value={l.id}>
+                                {l.label}
+                            </option>
+                        ))}
+                    </select>
+                </label>
+            )}
+
+            {showGame && (
+                <div className="game">
+                    <div className="game__board-col">
+                        {clocks[topColor] !== null && (
+                            <Timer label={colorLabel(topColor)} seconds={clocks[topColor]} active={gameStarted && !gameOver && turn === topColor} expired={timeoutLoser === topColor} />
+                        )}
+
+                        <div className="board-wrap">
+                            <Board
+                                board={board}
+                                selectedSquare={selectedSquare}
+                                legalTargets={legalTargets}
+                                checkSquare={checkSquare}
+                                theme={theme}
+                                flipped={playerColor === "b"}
+                                onSquareClick={handleSquareClick}
+                            />
+                            {pendingPromo && <PromotionModal color={turn} target={pendingPromo.to} onPick={handlePromotionPick} onCancel={handlePromotionCancel} />}
+                        </div>
+
+                        {clocks[bottomColor] !== null && (
+                            <Timer
+                                label={`${colorLabel(bottomColor)}${vsAI ? " (Kamu)" : ""}`}
+                                seconds={clocks[bottomColor]}
+                                active={gameStarted && !gameOver && turn === bottomColor}
+                                expired={timeoutLoser === bottomColor}
+                            />
+                        )}
+                    </div>
+
+                    <InfoPanel history={history} />
+                </div>
+            )}
+
+            {showGame && gameOver && showResult && resultTitle && (
+                <PostMatchScreen
+                    title={resultTitle}
+                    reason={resultReason}
+                    totalMoves={history.length}
+                    clocks={clocks}
+                    capturedByWhite={capturedByWhite}
+                    capturedByBlack={capturedByBlack}
+                    accuracy={accuracy}
+                    analyzing={analyzing}
+                    onRematch={handleReset}
+                    onMenu={handleBackToMenu}
+                />
+            )}
+
+            <footer className="app__footer">
+                {showGame && (
+                    <button className="btn" type="button" onClick={handleReset}>
+                        Reset Game
+                    </button>
+                )}
+                {showGame && (
+                    <button className="btn btn--ghost" type="button" onClick={handleBackToMenu}>
+                        Menu Utama
+                    </button>
+                )}
+                <button className="btn btn--ghost" type="button" onClick={handleSoundToggle}>
+                    {soundOn ? "Mute Sound" : "Unmute Sound"}
+                </button>
+            </footer>
+        </main>
+    );
 }
