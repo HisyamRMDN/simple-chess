@@ -128,13 +128,24 @@ chess-vibe/
 ├── public/                 # Static assets (favicons, Stockfish web workers)
 ├── src/
 │   ├── components/         # Reusable React UI components
+│   │   ├── BackgroundMusic.jsx # Background audio player & controls
 │   │   ├── Board.jsx       # Main chessboard rendering & logic
-│   │   ├── MainMenu.jsx    # Game configuration screen
-│   │   ├── Timer.jsx       # Chess clock logic
-│   │   └── ...
+│   │   ├── InfoPanel.jsx   # Player info & game status panel
+│   │   ├── LandingMenu.jsx # Initial landing screen
+│   │   ├── MainMenu.jsx    # Game setup & mode selection
+│   │   ├── PostMatchScreen.jsx # Match summary & stats screen
+│   │   ├── PromotionModal.jsx  # Pawn promotion selection dialog
+│   │   ├── SettingsModal.jsx   # Game configuration modal
+│   │   └── Timer.jsx       # Chess clock logic
 │   ├── App.jsx             # Main application flow & state management
+│   ├── game.js             # Chess state encapsulation
 │   ├── index.css           # Global styles & Tailwind directives
-│   └── game.js             # Chess state encapsulation
+│   ├── main.jsx            # React application entry point
+│   ├── sound.js            # Sound effects manager
+│   └── stockfish.js        # Stockfish chess engine integration
+├── .gitignore
+├── AGENTS.MD
+├── index.html
 ├── package.json
 └── vite.config.js
 ```
@@ -159,14 +170,6 @@ If you have a suggestion that would make this better, please fork the repo and c
 3. Commit your Changes (`git commit -m 'Add some AmazingFeature'`)
 4. Push to the Branch (`git push origin feature/AmazingFeature`)
 5. Open a Pull Request
-
-## License
-
-Distributed under the MIT License. See `LICENSE.txt` for more information.
-
----
-
-_Crafted with passion using AI Vibe Coding._
 
 <!-- MARKDOWN LINKS & IMAGES -->
 
