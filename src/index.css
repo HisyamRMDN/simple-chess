@@ -131,6 +131,9 @@ body {
 
 /* Pulsing hint while Stockfish is thinking */
 .status__ai {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
   color: #4d7c0f; /* lime-700 */
   animation: ai-pulse 1s ease-in-out infinite;
 }
@@ -142,6 +145,22 @@ body {
   }
   50% {
     opacity: 0.4;
+  }
+}
+
+/* Small loading spinner next to the thinking indicator */
+.spinner {
+  width: 0.85rem;
+  height: 0.85rem;
+  border-radius: 999px;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
   }
 }
 

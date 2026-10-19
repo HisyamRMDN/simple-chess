@@ -102,38 +102,50 @@ export default function App() {
   // In AI mode the engine plays the opposite color. If the player is Black,
   // Stockfish (White) automatically takes the first move on game start.
   // The engine runs inside a Web Worker, so the UI stays responsive.
+  // A human-like delay (0.5–2s) + locked board + indicator make it feel natural.
   const aiLevelRef = useRef(aiLevel);
   aiLevelRef.current = aiLevel;
   useEffect(() => {
     if (!vsAI || playerColor === null || gameOver || game.getTurn() !== aiColor) return;
     let cancelled = false;
+    let delayId = null;
     const level =
       AI_LEVELS.find((l) => l.id === aiLevelRef.current) ?? AI_LEVELS[2];
+    // Lock the board + show "thinking" immediately, before the engine reply.
     setAiThinking(true);
     getBestMove(game.getFen(), level)
       .then((uci) => {
         if (cancelled) return;
-        const move = game.makeMoveUci(uci);
-        if (move) {
-          playSoundFor(move);
-          setFen(game.getFen());
-        }
+        // Random thinking pause so the bot doesn't feel instant.
+        const pause = 500 + Math.random() * 1500;
+        delayId = setTimeout(() => {
+          if (cancelled) return;
+          const move = game.makeMoveUci(uci);
+          if (move) {
+            playSoundFor(move);
+            setFen(game.getFen());
+          }
+          setAiThinking(false);
+        }, pause);
       })
       .catch(() => {
         // Engine failed (e.g. offline CDN): fall back to local play
         // so the game stays playable instead of stalling.
         if (cancelled) return;
-        const fallback = pickFallbackMove(level);
-        if (fallback) {
-          playSoundFor(fallback);
-          setFen(game.getFen());
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setAiThinking(false);
+        const pause = 500 + Math.random() * 1500;
+        delayId = setTimeout(() => {
+          if (cancelled) return;
+          const fallback = pickFallbackMove(level);
+          if (fallback) {
+            playSoundFor(fallback);
+            setFen(game.getFen());
+          }
+          setAiThinking(false);
+        }, pause);
       });
     return () => {
       cancelled = true;
+      if (delayId) clearTimeout(delayId);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fen, vsAI, gameOver, aiColor, playerColor]);
@@ -373,7 +385,12 @@ export default function App() {
           {turn === "w" ? "White to move" : "Black to move"}
         </span>
         <span className={`status__state${status === "Check!" || status === "Checkmate!" ? " status__state--alert" : ""}`}>{timeoutMessage || status}</span>
-        {aiThinking && <span className="status__ai">AI berpikir…</span>}
+        {aiThinking && (
+          <span className="status__ai">
+            <span className="spinner" aria-hidden="true" />
+            Komputer sedang berpikir…
+          </span>
+        )}
       </section>
 
       <label className="theme-picker">
