@@ -6,12 +6,18 @@ const PIECES = {
   b: { k: "♚", q: "♛", r: "♜", b: "♝", n: "♞", p: "♟" },
 };
 
-/** Board grid; props: board matrix, selectedSquare, legalTargets, checkSquare, theme, onSquareClick. */
-export default function Board({ board, selectedSquare, legalTargets, checkSquare, theme, onSquareClick }) {
+/** Board grid; props: board matrix, selectedSquare, legalTargets, checkSquare, theme, flipped, onSquareClick. */
+export default function Board({ board, selectedSquare, legalTargets, checkSquare, theme, flipped, onSquareClick }) {
+  // Flip orientation: black at bottom shows ranks 1→8 and files h→a.
+  const rows = flipped ? [...board].reverse() : board;
   return (
     <div className={`board board--${theme}`} role="grid" aria-label="Chess board">
-      {board.map((row, rankIndex) =>
-        row.map((cell, fileIndex) => {
+      {rows.map((row, rowIndex) => {
+        const cells = flipped ? [...row].reverse() : row;
+        return cells.map((cell, colIndex) => {
+          // Map grid position back to real square name.
+          const rankIndex = flipped ? 7 - rowIndex : rowIndex;
+          const fileIndex = flipped ? 7 - colIndex : colIndex;
           const name = "abcdefgh"[fileIndex] + (8 - rankIndex);
           const isLight = (rankIndex + fileIndex) % 2 === 0;
           let className = `square ${isLight ? "square--light" : "square--dark"}`;
@@ -34,8 +40,8 @@ export default function Board({ board, selectedSquare, legalTargets, checkSquare
               )}
             </div>
           );
-        })
-      )}
+        });
+      })}
     </div>
   );
 }

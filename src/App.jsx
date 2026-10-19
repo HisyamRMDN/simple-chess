@@ -1,6 +1,10 @@
 // Main App component: game state + status + reset + sound effects + board themes + blitz timer.
 import React, { useEffect, useRef, useState } from "react";
 import Board from "./components/Board.jsx";
+import LandingMenu from "./components/LandingMenu.jsx";
+import MainMenu from "./components/MainMenu.jsx";
+import SettingsModal from "./components/SettingsModal.jsx";
+import BackgroundMusic from "./components/BackgroundMusic.jsx";
 import PromotionModal from "./components/PromotionModal.jsx";
 import Timer from "./components/Timer.jsx";
 import InfoPanel from "./components/InfoPanel.jsx";
@@ -25,14 +29,26 @@ export default function App() {
   const [legalTargets, setLegalTargets] = useState([]);
   const [soundOn, setSoundOn] = useState(true);
   const [theme, setTheme] = useState("classic");
+  // Global app theme: "light" | "dark" (board colors untouched).
+  const [mode, setMode] = useState("light");
   // Blitz clocks (seconds left). Keys: "w" = white, "b" = black.
-  const [clocks, setClocks] = useState({ w: START_SECONDS, b: START_SECONDS });
+  // null = no clock (∞ mode from the menu).
+  const [clocks, setClocks] = useState({ w: 5 * 60, b: 5 * 60 });
   // Loser color on timeout: "w" | "b" | null. Locks the board while set.
   const [timeoutLoser, setTimeoutLoser] = useState(null);
   // Game starts ticking only after the first move is made.
   const [gameStarted, setGameStarted] = useState(false);
-  // AI mode: when on, the player is White and Stockfish plays Black.
+  // AI mode: true = Stockfish plays opposite color; false = local 2 players.
   const [vsAI, setVsAI] = useState(false);
+  // Screen flow: "landing" -> "setup" -> "game".
+  const [screen, setScreen] = useState("landing");
+  // Settings modal visibility (openable from landing + game screens).
+  const [showSettings, setShowSettings] = useState(false);
+  // BGM + SFX switches. BGM starts only after the first user click.
+  const [bgmOn, setBgmOn] = useState(true);
+  const [audioUnlocked, setAudioUnlocked] = useState(false);
+  // Player color (null until a game starts; board/timer hidden).
+  const [playerColor, setPlayerColor] = useState(null);
   // Difficulty level id (see AI_LEVELS in stockfish.js), default Menengah.
   const [aiLevel, setAiLevel] = useState("medium");
   // True while Stockfish is thinking; locks the board and shows a hint.
@@ -57,13 +73,15 @@ export default function App() {
   turnRef.current = turn;
   overRef.current = gameOver;
 
-  /** Tick the active player's clock once per second. */
+  const aiColor = playerColor === "w" ? "b" : "w";
+
+  /** Tick the active player's clock once per second (skipped in ∞ mode). */
   useEffect(() => {
     const id = setInterval(() => {
       if (!gameStarted || overRef.current) return;
       const active = turnRef.current;
       setClocks((prev) => {
-        if (prev[active] <= 0) return prev;
+        if (prev[active] === null || prev[active] <= 0) return prev;
         const next = { ...prev, [active]: prev[active] - 1 };
         if (next[active] <= 0) setTimeoutLoser(active);
         return next;
@@ -81,13 +99,13 @@ export default function App() {
     else playMoveSound();
   }
 
-  // Whenever it is Black's turn in AI mode, ask Stockfish at the chosen
-  // difficulty for the best move and play it. The engine runs inside a
-  // Web Worker, so the UI stays responsive while it thinks.
+  // In AI mode the engine plays the opposite color. If the player is Black,
+  // Stockfish (White) automatically takes the first move on game start.
+  // The engine runs inside a Web Worker, so the UI stays responsive.
   const aiLevelRef = useRef(aiLevel);
   aiLevelRef.current = aiLevel;
   useEffect(() => {
-    if (!vsAI || gameOver || game.getTurn() !== "b") return;
+    if (!vsAI || playerColor === null || gameOver || game.getTurn() !== aiColor) return;
     let cancelled = false;
     const level =
       AI_LEVELS.find((l) => l.id === aiLevelRef.current) ?? AI_LEVELS[2];
@@ -117,13 +135,29 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [fen, vsAI, gameOver]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fen, vsAI, gameOver, aiColor, playerColor]);
+
+  // Unlock audio on the very first user click anywhere (autoplay policy).
+  useEffect(() => {
+    function unlock() {
+      setAudioUnlocked(true);
+      window.removeEventListener("pointerdown", unlock);
+    }
+    window.addEventListener("pointerdown", unlock);
+    return () => window.removeEventListener("pointerdown", unlock);
+  }, []);
+
+  // Apply global light/dark mode to <html> so CSS variables switch.
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", mode);
+  }, [mode]);
 
   /** Handle square click: select a piece or move to a legal target. */
   function handleSquareClick(square) {
-    // Locked: game over, AI is thinking, or Black's turn in AI mode.
-    if (gameOver || aiThinking) return;
-    if (vsAI && game.getTurn() !== "w") return;
+    // Locked: not in game screen, game over, AI thinking, or AI's turn.
+    if (screen !== "game" || playerColor === null || gameOver || aiThinking) return;
+    if (vsAI && game.getTurn() !== playerColor) return;
     // Promotion choice open: only the modal decides the next action.
     if (pendingPromo) return;
     if (selectedSquare && legalTargets.includes(square)) {
@@ -143,9 +177,9 @@ export default function App() {
         playSoundFor(move);
       }
     } else {
-      // In AI mode the player only controls White pieces.
+      // In AI mode the player only controls their own color.
       const piece = game.getPiece(square);
-      if (vsAI && piece && piece.color !== "w") {
+      if (vsAI && piece && piece.color !== playerColor) {
         setSelectedSquare(null);
         setLegalTargets([]);
         return;
@@ -180,8 +214,45 @@ export default function App() {
     setPendingPromo(null);
   }
 
+  /** Start the game from the setup config; setup unmounts (not hidden). */
+  function handleStartGame(config) {
+    stopEngine();
+    const startSeconds =
+      config.timeMinutes === null ? null : config.timeMinutes * 60;
+    // Local mode: no AI, both sides human (board stays unflipped).
+    setVsAI(config.mode === "ai");
+    setPlayerColor(config.color);
+    setScreen("game");
+    game.resetGame();
+    setSelectedSquare(null);
+    setLegalTargets([]);
+    setPendingPromo(null);
+    setFen(game.getFen());
+    setClocks({ w: startSeconds, b: startSeconds });
+    setTimeoutLoser(null);
+    setGameStarted(false);
+    setAiThinking(false);
+  }
+
   /** Reset the game to the starting position. */
   function handleReset() {
+    stopEngine();
+    game.resetGame();
+    setSelectedSquare(null);
+    setLegalTargets([]);
+    setPendingPromo(null);
+    setFen(game.getFen());
+    setClocks((prev) => {
+      const initial = prev.w === null && prev.b === null ? null : START_SECONDS;
+      return { w: initial, b: initial };
+    });
+    setTimeoutLoser(null);
+    setGameStarted(false);
+    setAiThinking(false);
+  }
+
+  /** Back to the landing screen (menu remounts, board hidden, clocks stopped). */
+  function handleBackToMenu() {
     stopEngine();
     game.resetGame();
     setSelectedSquare(null);
@@ -192,14 +263,14 @@ export default function App() {
     setTimeoutLoser(null);
     setGameStarted(false);
     setAiThinking(false);
+    setVsAI(false);
+    setPlayerColor(null);
+    setScreen("landing");
   }
 
-  /** Toggle AI mode: player is White, Stockfish plays Black. */
-  function handleModeToggle() {
-    const next = !vsAI;
+  /** Reset the game to the starting position. */
+  function handleReset() {
     stopEngine();
-    setVsAI(next);
-    // Fresh position so the AI always starts from the opening.
     game.resetGame();
     setSelectedSquare(null);
     setLegalTargets([]);
@@ -231,19 +302,70 @@ export default function App() {
     return game.makeMove(pick.from, pick.to, promotion);
   }
 
-  /** Timeout message, e.g. "Waktu Habis, Putih Kalah". */
+   /** Timeout message, e.g. "Waktu Habis, Putih Kalah". */
   const timeoutMessage =
     timeoutLoser !== null
       ? `Waktu Habis, ${timeoutLoser === "w" ? "Putih" : "Hitam"} Kalah`
       : "";
 
+  // Timers sit next to the player's own color: bottom = player, top = AI.
+  const topColor = playerColor === "w" ? "b" : "w";
+  const bottomColor = playerColor === "w" ? "w" : "b";
+  const colorLabel = (c) => (c === "w" ? "Putih" : "Hitam");
+  const timeLabel =
+    clocks.w === null ? "Tanpa batas" : `Blitz ${clocks.w !== null ? Math.round((clocks.w + clocks.b) / 120) : ""} mnt`;
+
+  // Overlays mount only on their screen (unmounted, not hidden).
+  const showLanding = screen === "landing";
+  const showSetup = screen === "setup";
+  const showGame = screen === "game";
+
   return (
     <main className="app">
+      {/* Persistent BGM: mounted once, survives all screen changes */}
+      <BackgroundMusic playing={bgmOn} unlocked={audioUnlocked} />
+      {showLanding && (
+        <LandingMenu
+          onPlay={() => setScreen("setup")}
+          onSettings={() => setShowSettings(true)}
+        />
+      )}
+      {showSetup && (
+        <MainMenu
+          onStartGame={handleStartGame}
+          onBack={() => setScreen("landing")}
+        />
+      )}
+      {showSettings && (
+        <SettingsModal
+          bgmOn={bgmOn}
+          soundOn={soundOn}
+          darkMode={mode === "dark"}
+          onToggleBgm={() => setBgmOn((v) => !v)}
+          onToggleSound={() => setSoundOn((v) => !v)}
+          onToggleMode={() => setMode(mode === "light" ? "dark" : "light")}
+          onClose={() => setShowSettings(false)}
+        />
+      )}
+
       <header className="app__header">
-        <h1>Chess Vibe</h1>
-        <p className="app__subtitle">
-          {vsAI ? "Main vs AI (kamu Putih) · React" : "Local multiplayer · React"}
-        </p>
+        <div className="app__header-text">
+          <h1>Vibe Chess</h1>
+          <p className="app__subtitle">
+            {playerColor === null
+              ? "Atur permainan untuk mulai · React"
+              : `${vsAI ? `Main vs AI (kamu ${playerColor === "w" ? "Putih" : "Hitam"})` : "Lokal 2 pemain"} · ${timeLabel}`}
+          </p>
+        </div>
+        <button
+          className="mode-toggle"
+          type="button"
+          onClick={() => setShowSettings(true)}
+          title="Buka Pengaturan"
+          aria-label="Buka Pengaturan"
+        >
+          ⚙️
+        </button>
       </header>
 
       <section className="status" aria-live="polite">
@@ -291,14 +413,17 @@ export default function App() {
         </label>
       )}
 
+      {showGame && (
       <div className="game">
         <div className="game__board-col">
+          {clocks[topColor] !== null && (
           <Timer
-            label="Hitam"
-            seconds={clocks.b}
-            active={gameStarted && !gameOver && turn === "b"}
-            expired={timeoutLoser === "b"}
+            label={colorLabel(topColor)}
+            seconds={clocks[topColor]}
+            active={gameStarted && !gameOver && turn === topColor}
+            expired={timeoutLoser === topColor}
           />
+          )}
 
           <div className="board-wrap">
             <Board
@@ -307,6 +432,7 @@ export default function App() {
               legalTargets={legalTargets}
               checkSquare={checkSquare}
               theme={theme}
+              flipped={playerColor === "b"}
               onSquareClick={handleSquareClick}
             />
             {pendingPromo && (
@@ -319,28 +445,35 @@ export default function App() {
             )}
           </div>
 
+          {clocks[bottomColor] !== null && (
           <Timer
-            label="Putih"
-            seconds={clocks.w}
-            active={gameStarted && !gameOver && turn === "w"}
-            expired={timeoutLoser === "w"}
+            label={`${colorLabel(bottomColor)}${vsAI ? " (Kamu)" : ""}`}
+            seconds={clocks[bottomColor]}
+            active={gameStarted && !gameOver && turn === bottomColor}
+            expired={timeoutLoser === bottomColor}
           />
+          )}
         </div>
 
         <InfoPanel history={history} />
       </div>
+      )}
 
       <footer className="app__footer">
+        {showGame && (
         <button className="btn" type="button" onClick={handleReset}>
           Reset Game
         </button>
+        )}
+        {showGame && (
         <button
-          className={`btn ${vsAI ? "" : "btn--ghost"}`}
+          className="btn btn--ghost"
           type="button"
-          onClick={handleModeToggle}
+          onClick={handleBackToMenu}
         >
-          {vsAI ? "Mode: vs AI" : "Main vs AI"}
+          Menu Utama
         </button>
+        )}
         <button className="btn btn--ghost" type="button" onClick={handleSoundToggle}>
           {soundOn ? "Mute Sound" : "Unmute Sound"}
         </button>
